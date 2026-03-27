@@ -24,6 +24,7 @@ declare global {
     };
     terminalAPI: TerminalAPI;
     calendarAPI: import('./calendar').CalendarAPI;
+    notionAPI: import('./notion').NotionAPI;
   }
 }
 

@@ -6,6 +6,7 @@ import { promisify } from 'util';
 import { authorize, isConnected, disconnect } from './googleOAuth';
 import { getTodaysEvents } from './googleCalendar';
 import { GOOGLE_CLIENT_ID, GOOGLE_SCOPES } from './calendarConfig';
+import * as notionService from './notionService';
 
 // node-pty must be required (not imported) due to native module loading
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -146,6 +147,43 @@ function setupIpcHandlers(): void {
   ipcMain.handle('calendar:disconnect', () => {
     disconnect();
   });
+
+  // -------------------------------------------------------------------------
+  // Notion IPC Handlers
+  // -------------------------------------------------------------------------
+
+  ipcMain.handle('notion:isConnected', () => {
+    return notionService.isConnected();
+  });
+
+  ipcMain.handle('notion:configure', async (_event, apiKey: string, databaseId: string, userEmail: string) => {
+    notionService.configure(apiKey, databaseId, userEmail);
+  });
+
+  ipcMain.handle('notion:testConnection', async () => {
+    await notionService.testConnection();
+  });
+
+  ipcMain.handle('notion:getTasks', async () => {
+    return notionService.getTodaysTasks();
+  });
+
+  ipcMain.on('notion:openTask', (_event, notionUrl: string) => {
+    if (notionUrl.startsWith('notion://')) {
+      shell.openExternal(notionUrl);
+    }
+  });
+
+  ipcMain.on('notion:openDatabase', () => {
+    const url = notionService.getDatabaseUrl();
+    if (url) {
+      shell.openExternal(url);
+    }
+  });
+
+  ipcMain.handle('notion:disconnect', () => {
+    notionService.disconnect();
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -195,6 +233,7 @@ function createWindow() {
 // ---------------------------------------------------------------------------
 
 app.whenReady().then(() => {
+  notionService.initialize();
   setupIpcHandlers();
   createWindow();
 });

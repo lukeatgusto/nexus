@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
 import PanelHeader from './PanelHeader';
+import NotionSetupWizard from './NotionSetupWizard';
 import type { CalendarEvent } from '@/types/calendar';
+import type { NotionTask } from '@/types/notion';
 
 const POLL_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
@@ -248,6 +250,208 @@ function CalendarSection() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Tasks Section (Notion Integration)
+// ---------------------------------------------------------------------------
+
+const TASKS_POLL_INTERVAL = 10 * 60 * 1000; // 10 minutes
+
+type TasksState =
+  | { status: 'loading' }
+  | { status: 'disconnected' }
+  | { status: 'connected'; tasks: NotionTask[] }
+  | { status: 'error'; message: string };
+
+function TasksSection() {
+  const [state, setState] = useState<TasksState>({ status: 'loading' });
+  const [showWizard, setShowWizard] = useState(false);
+
+  const fetchTasks = useCallback(async () => {
+    try {
+      const tasks = await window.notionAPI.getTasks();
+      setState({ status: 'connected', tasks });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to fetch tasks';
+      setState({ status: 'error', message: msg });
+    }
+  }, []);
+
+  const checkStatus = useCallback(async () => {
+    try {
+      const connected = await window.notionAPI.isConnected();
+      if (!connected) {
+        setState({ status: 'disconnected' });
+        return;
+      }
+      await fetchTasks();
+    } catch {
+      setState({ status: 'error', message: 'Failed to check Notion status' });
+    }
+  }, [fetchTasks]);
+
+  useEffect(() => {
+    checkStatus();
+  }, [checkStatus]);
+
+  // Poll for task updates when connected
+  useEffect(() => {
+    if (state.status !== 'connected') return;
+    const interval = setInterval(fetchTasks, TASKS_POLL_INTERVAL);
+    return () => clearInterval(interval);
+  }, [state.status, fetchTasks]);
+
+  const handleDisconnect = async () => {
+    await window.notionAPI.disconnect();
+    setState({ status: 'disconnected' });
+  };
+
+  const handleOpenTask = (notionUrl: string) => {
+    window.notionAPI.openTask(notionUrl);
+  };
+
+  const handleOpenDatabase = () => {
+    window.notionAPI.openDatabase();
+  };
+
+  const handleWizardComplete = () => {
+    setShowWizard(false);
+    checkStatus();
+  };
+
+  // Loading
+  if (state.status === 'loading') {
+    return (
+      <div className="flex-1 p-4 overflow-y-auto">
+        <div className="text-[12px] font-semibold text-macos-gray-300 mb-3">
+          Due Today
+        </div>
+        <div className="text-[11px] text-macos-gray-400 text-center py-4">Loading...</div>
+      </div>
+    );
+  }
+
+  // Disconnected - show connect button
+  if (state.status === 'disconnected') {
+    return (
+      <div className="flex-1 p-4 overflow-y-auto">
+        <div className="text-[12px] font-semibold text-macos-gray-300 mb-3">
+          Due Today
+        </div>
+        <button
+          onClick={() => setShowWizard(true)}
+          className="w-full bg-macos-blue/20 hover:bg-macos-blue/30 text-macos-blue text-[12px] py-3 px-4 rounded-lg transition-colors border border-macos-blue/30"
+        >
+          Connect Notion
+        </button>
+        {showWizard && (
+          <NotionSetupWizard
+            onComplete={handleWizardComplete}
+            onCancel={() => setShowWizard(false)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // Error
+  if (state.status === 'error') {
+    return (
+      <div className="flex-1 p-4 overflow-y-auto">
+        <div className="text-[12px] font-semibold text-macos-gray-300 mb-3">
+          Due Today
+        </div>
+        <div className="bg-red-500/10 rounded-lg p-3 border border-red-500/30">
+          <div className="text-[11px] text-red-400">{state.message}</div>
+          <button
+            onClick={checkStatus}
+            className="mt-2 text-[10px] text-macos-blue hover:underline"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Connected - show tasks
+  const { tasks } = state;
+
+  return (
+    <div className="flex-1 p-4 overflow-y-auto">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-[12px] font-semibold text-macos-gray-300">
+          Due Today
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={handleOpenDatabase}
+            className="text-[10px] text-macos-gray-400 hover:text-macos-gray-200 px-2 py-1 rounded hover:bg-macos-gray-700/50 transition-colors"
+          >
+            Open Board
+          </button>
+          <button
+            onClick={handleDisconnect}
+            className="text-[10px] text-macos-gray-400 hover:text-macos-gray-200 px-1.5 py-0.5 rounded hover:bg-macos-gray-700/50 transition-colors"
+            title="Disconnect Notion"
+          >
+            Disconnect
+          </button>
+        </div>
+      </div>
+
+      {tasks.length === 0 ? (
+        <div className="text-[11px] text-macos-gray-400 text-center py-4">
+          No tasks due today
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {tasks.map(task => (
+            <TaskCard key={task.id} task={task} onClick={handleOpenTask} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function getPriorityStyles(priority: NotionTask['priority']): { border: string; bg: string; hoverBg: string; label: string } {
+  switch (priority) {
+    case 'High':
+      return { border: 'border-red-500', bg: 'bg-red-500/20 dark:bg-red-500/10', hoverBg: 'hover:bg-red-500/30 dark:hover:bg-red-500/20', label: 'High' };
+    case 'Medium':
+      return { border: 'border-yellow-500', bg: 'bg-yellow-500/20 dark:bg-yellow-500/10', hoverBg: 'hover:bg-yellow-500/30 dark:hover:bg-yellow-500/20', label: 'Medium' };
+    case 'Low':
+      return { border: 'border-blue-500', bg: 'bg-blue-500/20 dark:bg-blue-500/10', hoverBg: 'hover:bg-blue-500/30 dark:hover:bg-blue-500/20', label: 'Low' };
+    default:
+      return { border: 'border-macos-gray-500', bg: 'bg-macos-gray-500/20 dark:bg-macos-gray-500/10', hoverBg: 'hover:bg-macos-gray-500/30 dark:hover:bg-macos-gray-500/20', label: 'No priority' };
+  }
+}
+
+function TaskCard({ task, onClick }: { task: NotionTask; onClick: (url: string) => void }) {
+  const styles = getPriorityStyles(task.priority);
+
+  return (
+    <div
+      onClick={() => onClick(task.notionUrl)}
+      className={`border-l-3 ${styles.border} ${styles.bg} ${styles.hoverBg} rounded-r-lg p-3 cursor-pointer transition-colors`}
+    >
+      <div className="text-[12px] font-medium text-macos-gray-200">
+        {task.title}
+      </div>
+      <div className="flex items-center gap-2 mt-1">
+        <span className="text-[10px] text-macos-gray-400">{styles.label}</span>
+        {task.status && (
+          <span className="text-[10px] text-macos-gray-500">{task.status}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Meeting Card
+// ---------------------------------------------------------------------------
+
 function MeetingCard({ event, onJoin }: { event: CalendarEvent; onJoin: (url: string) => void }) {
   return (
     <div
@@ -292,28 +496,7 @@ function LeftPanel() {
 
       <CalendarSection />
 
-      {/* Tasks Section */}
-      <div className="flex-1 p-4 overflow-y-auto">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-[12px] font-semibold text-macos-gray-300">
-            Due Today
-          </div>
-          <button className="text-[10px] text-macos-gray-400 hover:text-macos-gray-200 px-2 py-1 rounded hover:bg-macos-gray-700/50 transition-colors">
-            Open Board
-          </button>
-        </div>
-        <div className="space-y-2">
-          {/* Placeholder task items */}
-          <div className="border-l-3 border-red-500 bg-red-500/20 dark:bg-red-500/10 rounded-r-lg p-3 cursor-pointer hover:bg-red-500/30 dark:hover:bg-red-500/20 transition-colors">
-            <div className="text-[12px] font-medium text-macos-gray-200">Review Q2 roadmap</div>
-            <div className="text-[10px] text-macos-gray-400 mt-1">High</div>
-          </div>
-          <div className="border-l-3 border-yellow-500 bg-yellow-500/20 dark:bg-yellow-500/10 rounded-r-lg p-3 cursor-pointer hover:bg-yellow-500/30 dark:hover:bg-yellow-500/20 transition-colors">
-            <div className="text-[12px] font-medium text-macos-gray-200">Approve hiring req</div>
-            <div className="text-[10px] text-macos-gray-400 mt-1">Medium</div>
-          </div>
-        </div>
-      </div>
+      <TasksSection />
     </div>
   );
 }

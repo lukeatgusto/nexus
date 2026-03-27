@@ -25,6 +25,31 @@ contextBridge.exposeInMainWorld('calendarAPI', {
   },
 });
 
+// Expose Notion APIs to renderer process
+contextBridge.exposeInMainWorld('notionAPI', {
+  isConnected: (): Promise<boolean> => {
+    return ipcRenderer.invoke('notion:isConnected');
+  },
+  configure: (apiKey: string, databaseId: string, userEmail: string): Promise<void> => {
+    return ipcRenderer.invoke('notion:configure', apiKey, databaseId, userEmail);
+  },
+  testConnection: (): Promise<void> => {
+    return ipcRenderer.invoke('notion:testConnection');
+  },
+  getTasks: (): Promise<unknown[]> => {
+    return ipcRenderer.invoke('notion:getTasks');
+  },
+  openTask: (notionUrl: string) => {
+    ipcRenderer.send('notion:openTask', notionUrl);
+  },
+  openDatabase: () => {
+    ipcRenderer.send('notion:openDatabase');
+  },
+  disconnect: (): Promise<void> => {
+    return ipcRenderer.invoke('notion:disconnect');
+  },
+});
+
 // Expose Terminal APIs to renderer process
 contextBridge.exposeInMainWorld('terminalAPI', {
   write: (data: string) => {
