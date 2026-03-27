@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans antialiased;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  /* Dark mode (default) */
+  body {
+    @apply bg-macos-gray-900 text-white;
+  }
+
+  /* Light mode */
+  :root:not(.dark) body {
+    @apply bg-macos-gray-50 text-macos-gray-900;
+  }
+}

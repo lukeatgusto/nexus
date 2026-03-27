@@ -137,3 +137,19 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Electron
+dist/
+dist-electron/
+out/
+release/
+
+# Build
+.vite/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
