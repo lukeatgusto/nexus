@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 // Expose APIs to renderer process
 contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
+  openExternal: (url: string) => ipcRenderer.send('open-external', url),
 });
 
 // Expose Calendar APIs to renderer process

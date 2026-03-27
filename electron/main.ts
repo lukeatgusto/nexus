@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron';
+import { app, BrowserWindow, ipcMain, nativeTheme, shell } from 'electron';
 import path from 'path';
 import os from 'os';
 import { execFile } from 'child_process';
@@ -83,6 +83,13 @@ function cleanupPty(): void {
 // ---------------------------------------------------------------------------
 
 function setupIpcHandlers(): void {
+  ipcMain.on('open-external', (_event, url: string) => {
+    // Only allow http/https URLs for security
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      shell.openExternal(url);
+    }
+  });
+
   ipcMain.on('terminal:write', (_event, data: string) => {
     ptyProcess?.write(data);
   });

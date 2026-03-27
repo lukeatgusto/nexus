@@ -20,6 +20,7 @@ declare global {
   interface Window {
     electronAPI: {
       platform: string;
+      openExternal: (url: string) => void;
     };
     terminalAPI: TerminalAPI;
     calendarAPI: import('./calendar').CalendarAPI;

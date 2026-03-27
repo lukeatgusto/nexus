@@ -13,8 +13,41 @@ type CalendarState =
   | { status: 'error'; message: string }
   | { status: 'connected'; events: CalendarEvent[] };
 
+function getTimeUntil(startTime: string, endTime: string): { timeUntil: string; isNow: boolean; isPast: boolean } {
+  const now = Date.now();
+  const start = new Date(startTime).getTime();
+  const end = new Date(endTime).getTime();
+
+  if (now >= end) {
+    return { timeUntil: 'Ended', isNow: false, isPast: true };
+  }
+
+  if (now >= start) {
+    return { timeUntil: 'Now', isNow: true, isPast: false };
+  }
+
+  const diffMs = start - now;
+  const diffMin = Math.round(diffMs / 60000);
+
+  if (diffMin <= 0) {
+    return { timeUntil: 'Starting now', isNow: true, isPast: false };
+  }
+
+  if (diffMin < 60) {
+    return { timeUntil: `in ${diffMin} min`, isNow: false, isPast: false };
+  }
+
+  const hours = Math.floor(diffMin / 60);
+  const mins = diffMin % 60;
+  if (mins === 0) {
+    return { timeUntil: `in ${hours}h`, isNow: false, isPast: false };
+  }
+  return { timeUntil: `in ${hours}h ${mins}m`, isNow: false, isPast: false };
+}
+
 function CalendarSection() {
   const [state, setState] = useState<CalendarState>({ status: 'loading' });
+  const [timeUpdateTrigger, setTimeUpdateTrigger] = useState(0);
 
   const fetchEvents = useCallback(async () => {
     try {
@@ -50,7 +83,7 @@ function CalendarSection() {
     checkStatus();
   }, [checkStatus]);
 
-  // Poll for event updates when connected
+  // Poll for event updates when connected (5 minutes)
   useEffect(() => {
     if (state.status !== 'connected') return;
 
@@ -58,13 +91,15 @@ function CalendarSection() {
     return () => clearInterval(interval);
   }, [state.status, fetchEvents]);
 
-  // Also refresh time-until displays every minute
+  // Trigger re-renders every 60 seconds to update time-until strings
   useEffect(() => {
     if (state.status !== 'connected') return;
 
-    const interval = setInterval(fetchEvents, 60 * 1000);
+    const interval = setInterval(() => {
+      setTimeUpdateTrigger(prev => prev + 1);
+    }, 60 * 1000);
     return () => clearInterval(interval);
-  }, [state.status, fetchEvents]);
+  }, [state.status]);
 
   const handleConnect = async () => {
     setState({ status: 'connecting' });
@@ -83,7 +118,7 @@ function CalendarSection() {
   };
 
   const handleJoin = (zoomLink: string) => {
-    window.open(zoomLink, '_blank');
+    window.electronAPI.openExternal(zoomLink);
   };
 
   // Not configured - show setup instructions
@@ -171,7 +206,17 @@ function CalendarSection() {
   }
 
   // Connected - show events
-  const futureEvents = state.events.filter(e => !e.isPast);
+  // Use timeUpdateTrigger to ensure component re-renders when time changes
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _unused = timeUpdateTrigger;
+
+  // Recalculate time-based properties from stored event data
+  const enrichedEvents = state.events.map(event => {
+    const { timeUntil, isNow, isPast } = getTimeUntil(event.startTime, event.endTime);
+    return { ...event, timeUntil, isNow, isPast };
+  });
+
+  const futureEvents = enrichedEvents.filter(e => !e.isPast);
 
   return (
     <div className="p-4 border-b border-macos-gray-800 dark:border-macos-gray-900">
@@ -193,7 +238,7 @@ function CalendarSection() {
           No more meetings today
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2 max-h-[300px] overflow-y-auto">
           {futureEvents.map(event => (
             <MeetingCard key={event.id} event={event} onJoin={handleJoin} />
           ))}
