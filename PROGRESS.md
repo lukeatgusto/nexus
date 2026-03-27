@@ -52,17 +52,23 @@
 
 ---
 
-### 2b. Google Calendar Integration ⏳ TODO
+### 2b. Google Calendar Integration 📝 PLANNED
 **Goal:** Display today's meetings with one-click join + notes
 
-**Key Features:**
-- OAuth 2.0 authentication
-- Today's future events only
-- Zoom link extraction
-- "Join & Open Notes" button → opens Zoom + Notion page
-- 5-minute polling for updates
+**Plan:** `docs/superpowers/plans/2026-03-27-phase-2b-calendar.md`
 
-**Status:** Not yet planned in detail
+**Key Components:**
+- Standard OAuth 2.0 with PKCE (desktop app flow)
+- Google Calendar API (read-only scope)
+- Zoom link extraction from events
+- One-click connect (no Google Cloud setup for users!)
+- Secure local token storage with auto-refresh
+- 5-minute polling for event updates
+
+**Timeline:** 5 days (2 OAuth + 1 API + 1 UI + 1 testing)
+**Dependencies:** One-time OAuth app setup (Luke does once)
+
+**Status:** Plan complete, ready to implement after Phase 2a
 
 ---
 
@@ -204,5 +210,7 @@
 - ✅ Created PR #1
 - ✅ Discovered esbuild blocker
 - ✅ Submitted IT ticket
-- ✅ Started Phase 2 planning (Terminal)
+- ✅ Completed Phase 2a planning (Terminal integration)
+- ✅ Completed Phase 2b planning (Google Calendar integration)
 - ✅ Created this progress document
+- ✅ All planning docs committed to git and pushed to GitHub
