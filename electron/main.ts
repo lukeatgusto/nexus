@@ -7,7 +7,7 @@ import { authorize, isConnected, disconnect } from './googleOAuth';
 import { getTodaysEvents } from './googleCalendar';
 import { GOOGLE_CLIENT_ID, GOOGLE_SCOPES } from './calendarConfig';
 import * as notionService from './notionService';
-import { readDirectory } from './fileSystemService';
+import { readDirectory, isPathAllowed } from './fileSystemService';
 
 // node-pty must be required (not imported) due to native module loading
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -56,18 +56,14 @@ async function getCwd(): Promise<string> {
 
   try {
     const pid = ptyProcess.pid;
-    // macOS: use lsof to find the cwd of the shell process
-    const { stdout } = await execFileAsync('lsof', ['-p', String(pid)], {
+    // macOS: use lsof with machine-parseable output to find the cwd of the shell process
+    const { stdout } = await execFileAsync('lsof', ['-a', '-d', 'cwd', '-p', String(pid), '-Fn'], {
       timeout: 2000,
     });
-    // Output format: "zsh PID user cwd DIR ... /path/to/dir"
-    const cwdLine = stdout.split('\n').find(line => line.includes('cwd'));
-    if (cwdLine) {
-      const match = cwdLine.trim().split(/\s+/);
-      // The last token is the path
-      if (match.length > 0) {
-        return match[match.length - 1];
-      }
+    // Machine-parseable output: lines starting with 'n' contain the path
+    const nameLine = stdout.split('\n').find(line => line.startsWith('n'));
+    if (nameLine) {
+      return nameLine.slice(1); // Remove the 'n' prefix
     }
   } catch {
     // Fallback to home directory if lsof fails
@@ -218,18 +214,30 @@ function setupIpcHandlers(): void {
   // -------------------------------------------------------------------------
 
   ipcMain.handle('fs:readDirectory', (_event, dirPath: string) => {
+    if (!isPathAllowed(dirPath)) {
+      return [];
+    }
     return readDirectory(dirPath);
   });
 
   ipcMain.handle('fs:openFile', async (_event, filePath: string) => {
+    if (!isPathAllowed(filePath)) {
+      return;
+    }
     return shell.openPath(filePath);
   });
 
   ipcMain.on('fs:revealInFinder', (_event, filePath: string) => {
+    if (!isPathAllowed(filePath)) {
+      return;
+    }
     shell.showItemInFolder(filePath);
   });
 
   ipcMain.on('fs:copyPath', (_event, filePath: string) => {
+    if (!isPathAllowed(filePath)) {
+      return;
+    }
     clipboard.writeText(filePath);
   });
 }

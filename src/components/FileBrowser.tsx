@@ -20,7 +20,7 @@ function FileTreeNode({ node, depth, expandedPaths, onToggle, onContextMenu }: F
 
   // Load children when a directory is expanded
   useEffect(() => {
-    if (node.isDirectory && isExpanded && children.length === 0) {
+    if (node.isDirectory && isExpanded) {
       setLoading(true);
       window.fileSystemAPI.readDirectory(node.path).then((nodes) => {
         setChildren(nodes);
@@ -29,7 +29,7 @@ function FileTreeNode({ node, depth, expandedPaths, onToggle, onContextMenu }: F
         setLoading(false);
       });
     }
-  }, [isExpanded, node.isDirectory, node.path, children.length]);
+  }, [isExpanded, node.isDirectory, node.path]);
 
   const handleClick = useCallback(() => {
     if (node.isDirectory) {

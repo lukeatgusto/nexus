@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 
 export interface FileNode {
   name: string;
@@ -7,6 +8,16 @@ export interface FileNode {
   isDirectory: boolean;
   icon: string;
   children?: FileNode[];
+}
+
+/**
+ * Validates that the target path is within the user's home directory.
+ * Returns false for paths outside the home directory.
+ */
+export function isPathAllowed(targetPath: string): boolean {
+  const resolved = path.resolve(targetPath);
+  const home = os.homedir();
+  return resolved.startsWith(home + path.sep) || resolved === home;
 }
 
 /**
@@ -69,9 +80,9 @@ function getFileIcon(fileName: string, isDirectory: boolean): string {
  * with directories first, then files, each group alphabetically.
  * Hidden files (starting with .) are excluded.
  */
-export function readDirectory(dirPath: string): FileNode[] {
+export async function readDirectory(dirPath: string): Promise<FileNode[]> {
   try {
-    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
 
     const nodes: FileNode[] = entries
       .filter((entry) => !entry.name.startsWith('.'))
