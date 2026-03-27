@@ -1,0 +1,17 @@
+appId: com.lukeatgusto.nexus
+productName: Nexus
+directories:
+  buildResources: build
+  output: release
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - package.json
+mac:
+  target:
+    - dmg
+  category: public.app-category.productivity
+  icon: build/icon.icns
+dmg:
+  title: Nexus
+  icon: build/icon.icns
