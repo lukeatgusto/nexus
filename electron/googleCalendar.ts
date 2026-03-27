@@ -11,11 +11,9 @@ export interface CalendarEvent {
   startTime: string;       // ISO string
   endTime: string;          // ISO string
   startDisplay: string;     // "9:00 AM"
-  timeUntil: string;        // "in 23 min", "in 1h 30m", "Starting now", "Started 5m ago"
-  isNow: boolean;           // Currently happening
-  isPast: boolean;          // Already ended
   zoomLink: string | null;
   location: string | null;
+  isAllDay: boolean;
 }
 
 const ZOOM_REGEX = /https?:\/\/[a-z0-9.-]*zoom\.us\/j\/\d+(\?pwd=[a-zA-Z0-9]+)?/;
@@ -54,37 +52,6 @@ function formatTime(isoString: string): string {
   });
 }
 
-function calculateTimeUntil(startTime: string, endTime: string): { timeUntil: string; isNow: boolean; isPast: boolean } {
-  const now = Date.now();
-  const start = new Date(startTime).getTime();
-  const end = new Date(endTime).getTime();
-
-  if (now >= end) {
-    return { timeUntil: 'Ended', isNow: false, isPast: true };
-  }
-
-  if (now >= start) {
-    return { timeUntil: 'Now', isNow: true, isPast: false };
-  }
-
-  const diffMs = start - now;
-  const diffMin = Math.round(diffMs / 60000);
-
-  if (diffMin <= 0) {
-    return { timeUntil: 'Starting now', isNow: true, isPast: false };
-  }
-
-  if (diffMin < 60) {
-    return { timeUntil: `in ${diffMin} min`, isNow: false, isPast: false };
-  }
-
-  const hours = Math.floor(diffMin / 60);
-  const mins = diffMin % 60;
-  if (mins === 0) {
-    return { timeUntil: `in ${hours}h`, isNow: false, isPast: false };
-  }
-  return { timeUntil: `in ${hours}h ${mins}m`, isNow: false, isPast: false };
-}
 
 interface GoogleCalendarEvent {
   id: string;
@@ -115,6 +82,7 @@ export async function getTodaysEvents(clientId: string): Promise<CalendarEvent[]
     singleEvents: 'true',
     orderBy: 'startTime',
     maxResults: '20',
+    conferenceDataVersion: '1',
   });
 
   const response = await fetch(
@@ -133,22 +101,17 @@ export async function getTodaysEvents(clientId: string): Promise<CalendarEvent[]
   const events: CalendarEvent[] = [];
 
   for (const item of data.items || []) {
-    // Skip all-day events (they have .date instead of .dateTime)
-    if (!item.start.dateTime || !item.end.dateTime) continue;
-
-    const { timeUntil, isNow, isPast } = calculateTimeUntil(item.start.dateTime, item.end.dateTime);
+    const isAllDay = !item.start.dateTime || !item.end.dateTime;
 
     events.push({
       id: item.id,
       title: item.summary || '(No title)',
-      startTime: item.start.dateTime,
-      endTime: item.end.dateTime,
-      startDisplay: formatTime(item.start.dateTime),
-      timeUntil,
-      isNow,
-      isPast,
+      startTime: item.start.dateTime || item.start.date || '',
+      endTime: item.end.dateTime || item.end.date || '',
+      startDisplay: item.start.dateTime ? formatTime(item.start.dateTime) : 'All day',
       zoomLink: extractZoomLink(item),
       location: item.location || null,
+      isAllDay,
     });
   }
 

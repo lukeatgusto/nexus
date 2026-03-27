@@ -11,6 +11,9 @@ const ALGORITHM = 'aes-256-gcm';
 const STORE_FILE = 'google-tokens.enc';
 
 // Derive a machine-specific encryption key from a stable identifier
+// Note: This provides obfuscation, not true security. The key is derived from
+// the username which is not secret. Primary protection is filesystem permissions.
+// For stronger security, consider Electron's safeStorage API (OS keychain).
 function getEncryptionKey(): Buffer {
   const machineId = `nexus-token-store-${process.env.USER || 'default'}`;
   return crypto.scryptSync(machineId, 'nexus-salt', 32);

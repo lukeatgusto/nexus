@@ -5,11 +5,9 @@ export interface CalendarEvent {
   startTime: string;
   endTime: string;
   startDisplay: string;
-  timeUntil: string;
-  isNow: boolean;
-  isPast: boolean;
   zoomLink: string | null;
   location: string | null;
+  isAllDay: boolean;
 }
 
 /** Calendar API exposed via contextBridge in preload.ts */
