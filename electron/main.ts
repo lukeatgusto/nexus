@@ -1,7 +1,106 @@
-import { app, BrowserWindow, nativeTheme } from 'electron';
+import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron';
 import path from 'path';
+import os from 'os';
+import { execSync } from 'child_process';
+
+// node-pty must be required (not imported) due to native module loading
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const pty = require('node-pty');
 
 let mainWindow: BrowserWindow | null = null;
+let ptyProcess: ReturnType<typeof pty.spawn> | null = null;
+
+// ---------------------------------------------------------------------------
+// PTY Management
+// ---------------------------------------------------------------------------
+
+function spawnShell(): void {
+  const shell = process.env.SHELL || '/bin/zsh';
+  const home = os.homedir();
+
+  ptyProcess = pty.spawn(shell, ['--login'], {
+    name: 'xterm-256color',
+    cols: 80,
+    rows: 24,
+    cwd: home,
+    env: {
+      ...process.env,
+      TERM: 'xterm-256color',
+      COLORTERM: 'truecolor',
+    },
+  });
+
+  // Forward shell output to the renderer
+  ptyProcess.onData((data: string) => {
+    mainWindow?.webContents.send('terminal:data', data);
+  });
+
+  ptyProcess.onExit(({ exitCode }: { exitCode: number }) => {
+    mainWindow?.webContents.send('terminal:exit', exitCode);
+    ptyProcess = null;
+  });
+}
+
+function getCwd(): string {
+  if (!ptyProcess) return os.homedir();
+
+  try {
+    const pid = ptyProcess.pid;
+    // macOS: use lsof to find the cwd of the shell process
+    const output = execSync(`lsof -p ${pid} | grep cwd`, {
+      encoding: 'utf-8',
+      timeout: 2000,
+    });
+    // Output format: "zsh PID user cwd DIR ... /path/to/dir"
+    const match = output.trim().split(/\s+/);
+    // The last token is the path
+    if (match.length > 0) {
+      return match[match.length - 1];
+    }
+  } catch {
+    // Fallback to home directory if lsof fails
+  }
+  return os.homedir();
+}
+
+function cleanupPty(): void {
+  if (ptyProcess) {
+    ptyProcess.kill();
+    ptyProcess = null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// IPC Handlers
+// ---------------------------------------------------------------------------
+
+function setupIpcHandlers(): void {
+  ipcMain.on('terminal:write', (_event, data: string) => {
+    ptyProcess?.write(data);
+  });
+
+  ipcMain.on('terminal:resize', (_event, cols: number, rows: number) => {
+    if (ptyProcess && cols > 0 && rows > 0) {
+      try {
+        ptyProcess.resize(cols, rows);
+      } catch {
+        // Ignore resize errors (can happen during cleanup)
+      }
+    }
+  });
+
+  ipcMain.handle('terminal:getCwd', () => {
+    return getCwd();
+  });
+
+  ipcMain.on('terminal:dispose', () => {
+    cleanupPty();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Window Management
+// ---------------------------------------------------------------------------
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -33,13 +132,25 @@ function createWindow() {
   });
 
   mainWindow.on('closed', () => {
+    cleanupPty();
     mainWindow = null;
   });
+
+  // Spawn the shell after the window is ready
+  spawnShell();
 }
 
-app.whenReady().then(createWindow);
+// ---------------------------------------------------------------------------
+// App Lifecycle
+// ---------------------------------------------------------------------------
+
+app.whenReady().then(() => {
+  setupIpcHandlers();
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
+  cleanupPty();
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -49,4 +160,8 @@ app.on('activate', () => {
   if (mainWindow === null) {
     createWindow();
   }
+});
+
+app.on('before-quit', () => {
+  cleanupPty();
 });
