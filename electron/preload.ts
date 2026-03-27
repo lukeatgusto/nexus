@@ -76,10 +76,33 @@ contextBridge.exposeInMainWorld('terminalAPI', {
   getCwd: (): Promise<string> => {
     return ipcRenderer.invoke('terminal:getCwd');
   },
+  onCwdChange: (callback: (cwd: string) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, cwd: string) => callback(cwd);
+    ipcRenderer.on('terminal:cwdChanged', handler);
+    return () => {
+      ipcRenderer.removeListener('terminal:cwdChanged', handler);
+    };
+  },
   dispose: () => {
     ipcRenderer.send('terminal:dispose');
   },
   restart: () => {
     ipcRenderer.send('terminal:restart');
+  },
+});
+
+// Expose File System APIs to renderer process
+contextBridge.exposeInMainWorld('fileSystemAPI', {
+  readDirectory: (dirPath: string): Promise<unknown[]> => {
+    return ipcRenderer.invoke('fs:readDirectory', dirPath);
+  },
+  openFile: (filePath: string): Promise<string> => {
+    return ipcRenderer.invoke('fs:openFile', filePath);
+  },
+  revealInFinder: (filePath: string) => {
+    ipcRenderer.send('fs:revealInFinder', filePath);
+  },
+  copyPath: (filePath: string) => {
+    ipcRenderer.send('fs:copyPath', filePath);
   },
 });

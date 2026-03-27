@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, nativeTheme, shell } from 'electron';
+import { app, BrowserWindow, clipboard, ipcMain, nativeTheme, shell } from 'electron';
 import path from 'path';
 import os from 'os';
 import { execFile } from 'child_process';
@@ -7,6 +7,7 @@ import { authorize, isConnected, disconnect } from './googleOAuth';
 import { getTodaysEvents } from './googleCalendar';
 import { GOOGLE_CLIENT_ID, GOOGLE_SCOPES } from './calendarConfig';
 import * as notionService from './notionService';
+import { readDirectory } from './fileSystemService';
 
 // node-pty must be required (not imported) due to native module loading
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -16,6 +17,8 @@ const execFileAsync = promisify(execFile);
 
 let mainWindow: BrowserWindow | null = null;
 let ptyProcess: ReturnType<typeof pty.spawn> | null = null;
+let cwdPollInterval: ReturnType<typeof setInterval> | null = null;
+let lastKnownCwd: string = os.homedir();
 
 // ---------------------------------------------------------------------------
 // PTY Management
@@ -72,7 +75,31 @@ async function getCwd(): Promise<string> {
   return os.homedir();
 }
 
+function startCwdPolling(): void {
+  stopCwdPolling();
+  lastKnownCwd = os.homedir();
+  cwdPollInterval = setInterval(async () => {
+    try {
+      const cwd = await getCwd();
+      if (cwd !== lastKnownCwd) {
+        lastKnownCwd = cwd;
+        mainWindow?.webContents.send('terminal:cwdChanged', cwd);
+      }
+    } catch {
+      // Ignore polling errors
+    }
+  }, 1000);
+}
+
+function stopCwdPolling(): void {
+  if (cwdPollInterval) {
+    clearInterval(cwdPollInterval);
+    cwdPollInterval = null;
+  }
+}
+
 function cleanupPty(): void {
+  stopCwdPolling();
   if (ptyProcess) {
     ptyProcess.kill();
     ptyProcess = null;
@@ -116,6 +143,7 @@ function setupIpcHandlers(): void {
   ipcMain.on('terminal:restart', () => {
     cleanupPty();
     spawnShell();
+    startCwdPolling();
   });
 
   // -------------------------------------------------------------------------
@@ -184,6 +212,26 @@ function setupIpcHandlers(): void {
   ipcMain.handle('notion:disconnect', () => {
     notionService.disconnect();
   });
+
+  // -------------------------------------------------------------------------
+  // File System IPC Handlers
+  // -------------------------------------------------------------------------
+
+  ipcMain.handle('fs:readDirectory', (_event, dirPath: string) => {
+    return readDirectory(dirPath);
+  });
+
+  ipcMain.handle('fs:openFile', async (_event, filePath: string) => {
+    return shell.openPath(filePath);
+  });
+
+  ipcMain.on('fs:revealInFinder', (_event, filePath: string) => {
+    shell.showItemInFolder(filePath);
+  });
+
+  ipcMain.on('fs:copyPath', (_event, filePath: string) => {
+    clipboard.writeText(filePath);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -226,6 +274,7 @@ function createWindow() {
 
   // Spawn the shell after the window is ready
   spawnShell();
+  startCwdPolling();
 }
 
 // ---------------------------------------------------------------------------
