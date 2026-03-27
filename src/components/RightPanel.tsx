@@ -9,7 +9,7 @@ function RightPanel() {
   const [activeTab, setActiveTab] = useState<Tab>('files');
 
   return (
-    <div className="h-full flex flex-col bg-macos-gray-800/30 dark:bg-macos-gray-900/30 border-l border-macos-gray-800 dark:border-macos-gray-900">
+    <div className="h-full flex flex-col bg-macos-gray-100/50 dark:bg-macos-gray-900/30 border-l border-macos-gray-200 dark:border-macos-gray-900">
       <PanelHeader
         title="Tools"
         icon="🔧"
@@ -18,14 +18,14 @@ function RightPanel() {
       />
 
       {/* Tabs */}
-      <div className="px-3 py-2 border-b border-macos-gray-800 dark:border-macos-gray-900 flex gap-2">
+      <div className="px-3 py-2 border-b border-macos-gray-200 dark:border-macos-gray-900 flex gap-2">
         <button
           onClick={() => setActiveTab('files')}
           className={`
             px-3 py-1.5 text-[11px] rounded-md transition-colors
             ${activeTab === 'files'
-              ? 'bg-macos-gray-700/50 text-macos-gray-200'
-              : 'text-macos-gray-400 hover:text-macos-gray-200 hover:bg-macos-gray-700/30'
+              ? 'bg-macos-gray-200 dark:bg-macos-gray-700/50 text-macos-gray-900 dark:text-macos-gray-200'
+              : 'text-macos-gray-600 dark:text-macos-gray-400 hover:text-macos-gray-900 dark:hover:text-macos-gray-200 hover:bg-macos-gray-200/50 dark:hover:bg-macos-gray-700/30'
             }
           `}
         >
@@ -36,8 +36,8 @@ function RightPanel() {
           className={`
             px-3 py-1.5 text-[11px] rounded-md transition-colors
             ${activeTab === 'agents'
-              ? 'bg-macos-gray-700/50 text-macos-gray-200'
-              : 'text-macos-gray-400 hover:text-macos-gray-200 hover:bg-macos-gray-700/30'
+              ? 'bg-macos-gray-200 dark:bg-macos-gray-700/50 text-macos-gray-900 dark:text-macos-gray-200'
+              : 'text-macos-gray-600 dark:text-macos-gray-400 hover:text-macos-gray-900 dark:hover:text-macos-gray-200 hover:bg-macos-gray-200/50 dark:hover:bg-macos-gray-700/30'
             }
           `}
         >
@@ -51,16 +51,16 @@ function RightPanel() {
           <div>
             <div className="text-[11px] text-macos-gray-500 mb-2">~/Documents/BraveNewWorld</div>
             <div className="font-mono text-[11px] text-macos-gray-300 space-y-1">
-              <div className="hover:bg-macos-gray-700/30 p-1 rounded cursor-pointer">
+              <div className="hover:bg-macos-gray-200 dark:hover:bg-macos-gray-700/30 p-1 rounded cursor-pointer">
                 📂 docs/
               </div>
-              <div className="hover:bg-macos-gray-700/30 p-1 pl-4 rounded cursor-pointer">
+              <div className="hover:bg-macos-gray-200 dark:hover:bg-macos-gray-700/30 p-1 pl-4 rounded cursor-pointer">
                 📄 README.md
               </div>
-              <div className="hover:bg-macos-gray-700/30 p-1 pl-4 rounded cursor-pointer">
+              <div className="hover:bg-macos-gray-200 dark:hover:bg-macos-gray-700/30 p-1 pl-4 rounded cursor-pointer">
                 📄 spec.md
               </div>
-              <div className="hover:bg-macos-gray-700/30 p-1 rounded cursor-pointer">
+              <div className="hover:bg-macos-gray-200 dark:hover:bg-macos-gray-700/30 p-1 rounded cursor-pointer">
                 📂 src/
               </div>
             </div>

@@ -8,7 +8,7 @@ function Layout() {
   const { leftPanelCollapsed, rightPanelCollapsed } = useAppContext();
 
   return (
-    <div className="h-screen w-screen flex bg-macos-gray-900 dark:bg-macos-gray-950">
+    <div className="h-screen w-screen flex bg-macos-gray-50 dark:bg-macos-gray-950">
       {/* Left Panel */}
       <div
         className={`
