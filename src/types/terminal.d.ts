@@ -12,6 +12,8 @@ export interface TerminalAPI {
   getCwd: () => Promise<string>;
   /** Dispose the PTY process */
   dispose: () => void;
+  /** Restart the shell process */
+  restart: () => void;
 }
 
 declare global {

@@ -34,4 +34,7 @@ contextBridge.exposeInMainWorld('terminalAPI', {
   dispose: () => {
     ipcRenderer.send('terminal:dispose');
   },
+  restart: () => {
+    ipcRenderer.send('terminal:restart');
+  },
 });

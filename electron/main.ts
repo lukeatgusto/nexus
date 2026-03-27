@@ -1,11 +1,14 @@
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron';
 import path from 'path';
 import os from 'os';
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 
 // node-pty must be required (not imported) due to native module loading
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const pty = require('node-pty');
+
+const execFileAsync = promisify(execFile);
 
 let mainWindow: BrowserWindow | null = null;
 let ptyProcess: ReturnType<typeof pty.spawn> | null = null;
@@ -41,21 +44,23 @@ function spawnShell(): void {
   });
 }
 
-function getCwd(): string {
+async function getCwd(): Promise<string> {
   if (!ptyProcess) return os.homedir();
 
   try {
     const pid = ptyProcess.pid;
     // macOS: use lsof to find the cwd of the shell process
-    const output = execSync(`lsof -p ${pid} | grep cwd`, {
-      encoding: 'utf-8',
+    const { stdout } = await execFileAsync('lsof', ['-p', String(pid)], {
       timeout: 2000,
     });
     // Output format: "zsh PID user cwd DIR ... /path/to/dir"
-    const match = output.trim().split(/\s+/);
-    // The last token is the path
-    if (match.length > 0) {
-      return match[match.length - 1];
+    const cwdLine = stdout.split('\n').find(line => line.includes('cwd'));
+    if (cwdLine) {
+      const match = cwdLine.trim().split(/\s+/);
+      // The last token is the path
+      if (match.length > 0) {
+        return match[match.length - 1];
+      }
     }
   } catch {
     // Fallback to home directory if lsof fails
@@ -95,6 +100,11 @@ function setupIpcHandlers(): void {
 
   ipcMain.on('terminal:dispose', () => {
     cleanupPty();
+  });
+
+  ipcMain.on('terminal:restart', () => {
+    cleanupPty();
+    spawnShell();
   });
 }
 

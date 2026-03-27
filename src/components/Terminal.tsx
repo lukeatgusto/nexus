@@ -60,6 +60,7 @@ function Terminal() {
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const cleanupRef = useRef<Array<() => void>>([]);
+  const [shellExited, setShellExited] = React.useState(false);
   const { theme, leftPanelCollapsed, rightPanelCollapsed } = useAppContext();
 
   // Fit terminal to container
@@ -89,7 +90,6 @@ function Terminal() {
       cursorBlink: true,
       cursorStyle: 'bar',
       scrollback: 10000,
-      allowProposedApi: true,
       theme: theme === 'dark' ? DARK_THEME : LIGHT_THEME,
     });
 
@@ -126,6 +126,7 @@ function Terminal() {
     // Handle shell exit
     const removeExitListener = window.terminalAPI.onExit((_exitCode) => {
       xterm.write('\r\n\x1b[90m[Shell process exited]\x1b[0m\r\n');
+      setShellExited(true);
     });
 
     // Handle window resize
@@ -188,17 +189,55 @@ function Terminal() {
     return () => observer.disconnect();
   }, [fitTerminal]);
 
+  const handleRestart = () => {
+    setShellExited(false);
+    window.terminalAPI.restart();
+    // Clear and re-focus the terminal
+    if (xtermRef.current) {
+      xtermRef.current.clear();
+      xtermRef.current.focus();
+    }
+  };
+
   return (
-    <div
-      ref={terminalRef}
-      className="w-full h-full"
-      style={{
-        // Ensure xterm fills the container
-        padding: '8px',
-        boxSizing: 'border-box',
-        backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFFFFF',
-      }}
-    />
+    <div className="w-full h-full relative">
+      <div
+        ref={terminalRef}
+        className="w-full h-full"
+        style={{
+          // Ensure xterm fills the container
+          padding: '8px',
+          boxSizing: 'border-box',
+          backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFFFFF',
+        }}
+      />
+      {shellExited && (
+        <div
+          className="absolute inset-0 flex items-center justify-center"
+          style={{
+            backgroundColor: theme === 'dark' ? 'rgba(28, 28, 30, 0.8)' : 'rgba(255, 255, 255, 0.8)',
+            backdropFilter: 'blur(4px)',
+          }}
+        >
+          <button
+            onClick={handleRestart}
+            className="px-6 py-3 rounded-lg font-medium transition-colors"
+            style={{
+              backgroundColor: theme === 'dark' ? '#007AFF' : '#007AFF',
+              color: '#FFFFFF',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = theme === 'dark' ? '#0051D5' : '#0051D5';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = '#007AFF';
+            }}
+          >
+            Restart Shell
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
