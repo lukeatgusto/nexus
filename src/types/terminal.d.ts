@@ -22,6 +22,7 @@ declare global {
       platform: string;
     };
     terminalAPI: TerminalAPI;
+    calendarAPI: import('./calendar').CalendarAPI;
   }
 }
 

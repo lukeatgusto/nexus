@@ -3,6 +3,9 @@ import path from 'path';
 import os from 'os';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { authorize, isConnected, disconnect } from './googleOAuth';
+import { getTodaysEvents } from './googleCalendar';
+import { GOOGLE_CLIENT_ID, GOOGLE_SCOPES } from './calendarConfig';
 
 // node-pty must be required (not imported) due to native module loading
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -105,6 +108,36 @@ function setupIpcHandlers(): void {
   ipcMain.on('terminal:restart', () => {
     cleanupPty();
     spawnShell();
+  });
+
+  // -------------------------------------------------------------------------
+  // Calendar IPC Handlers
+  // -------------------------------------------------------------------------
+
+  ipcMain.handle('calendar:isConfigured', () => {
+    return GOOGLE_CLIENT_ID !== '';
+  });
+
+  ipcMain.handle('calendar:isConnected', () => {
+    return isConnected();
+  });
+
+  ipcMain.handle('calendar:authorize', async () => {
+    if (!GOOGLE_CLIENT_ID) {
+      throw new Error('Google Client ID not configured. Set GOOGLE_CLIENT_ID in electron/calendarConfig.ts');
+    }
+    await authorize({ clientId: GOOGLE_CLIENT_ID, scopes: GOOGLE_SCOPES });
+  });
+
+  ipcMain.handle('calendar:getEvents', async () => {
+    if (!GOOGLE_CLIENT_ID) {
+      throw new Error('Google Client ID not configured');
+    }
+    return getTodaysEvents(GOOGLE_CLIENT_ID);
+  });
+
+  ipcMain.handle('calendar:disconnect', () => {
+    disconnect();
   });
 }
 

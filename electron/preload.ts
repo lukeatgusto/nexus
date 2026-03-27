@@ -5,6 +5,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
 });
 
+// Expose Calendar APIs to renderer process
+contextBridge.exposeInMainWorld('calendarAPI', {
+  isConnected: (): Promise<boolean> => {
+    return ipcRenderer.invoke('calendar:isConnected');
+  },
+  isConfigured: (): Promise<boolean> => {
+    return ipcRenderer.invoke('calendar:isConfigured');
+  },
+  authorize: (): Promise<void> => {
+    return ipcRenderer.invoke('calendar:authorize');
+  },
+  getEvents: (): Promise<unknown[]> => {
+    return ipcRenderer.invoke('calendar:getEvents');
+  },
+  disconnect: (): Promise<void> => {
+    return ipcRenderer.invoke('calendar:disconnect');
+  },
+});
+
 // Expose Terminal APIs to renderer process
 contextBridge.exposeInMainWorld('terminalAPI', {
   write: (data: string) => {
