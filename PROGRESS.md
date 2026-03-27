@@ -72,17 +72,27 @@
 
 ---
 
-### 2c. Notion Tasks Integration ⏳ TODO
+### 2c. Notion Tasks Integration 📝 PLANNED
 **Goal:** Show tasks assigned to user, due today
 
-**Key Features:**
-- Notion API authentication
-- Query for tasks with filters (assignee, due date)
-- Color-coded by priority
-- Click to open in Notion app
-- Link to task board
+**Plan:** `docs/superpowers/plans/2026-03-27-phase-2c-notion.md`
 
-**Status:** Not yet planned in detail
+**Key Components:**
+- Simple API key authentication (no OAuth!)
+- Notion JavaScript SDK
+- Database query with filters (assignee, due date, status)
+- Color-coded by priority (Red=High, Yellow=Medium, Blue=Low)
+- 3-step setup wizard with instructions
+- Click task to open in Notion app
+- "Open Board" link to database
+- 10-minute polling for updates
+
+**Timeline:** 3.5 days (1 service + 1 wizard + 1 UI + 0.5 test)
+**Dependencies:** User creates Notion integration (5 min)
+
+**Status:** Plan complete, ready to implement after Phase 2b
+
+**Note:** Simpler than Calendar! No OAuth, just API key + database ID
 
 ---
 
@@ -210,7 +220,8 @@
 - ✅ Created PR #1
 - ✅ Discovered esbuild blocker
 - ✅ Submitted IT ticket
-- ✅ Completed Phase 2a planning (Terminal integration)
-- ✅ Completed Phase 2b planning (Google Calendar integration)
-- ✅ Created this progress document
+- ✅ Completed Phase 2a planning (Terminal integration - 677 lines)
+- ✅ Completed Phase 2b planning (Google Calendar integration - 811 lines)
+- ✅ Completed Phase 2c planning (Notion Tasks integration - 774 lines)
+- ✅ Created PROGRESS.md tracker
 - ✅ All planning docs committed to git and pushed to GitHub
