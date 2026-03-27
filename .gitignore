@@ -153,3 +153,6 @@ release/
 # IDE
 .vscode/
 .idea/
+
+# Git worktrees
+.worktrees/
