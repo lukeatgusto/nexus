@@ -23,6 +23,7 @@ export interface NotionCredentials {
   apiKey: string;
   databaseId: string;
   userEmail: string;
+  userId?: string; // Notion user ID (UUID) resolved from email
 }
 
 export function saveNotionCredentials(creds: NotionCredentials): void {

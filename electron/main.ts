@@ -157,7 +157,7 @@ function setupIpcHandlers(): void {
   });
 
   ipcMain.handle('notion:configure', async (_event, apiKey: string, databaseId: string, userEmail: string) => {
-    notionService.configure(apiKey, databaseId, userEmail);
+    await notionService.configure(apiKey, databaseId, userEmail);
   });
 
   ipcMain.handle('notion:testConnection', async () => {

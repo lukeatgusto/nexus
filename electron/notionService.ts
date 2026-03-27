@@ -43,11 +43,44 @@ export function isConnected(): boolean {
 }
 
 /**
- * Configure the service with new credentials and persist them.
+ * Resolve a user email to a Notion user ID.
+ * Returns null if the email cannot be found.
  */
-export function configure(apiKey: string, databaseId: string, userEmail: string): void {
-  credentials = { apiKey, databaseId, userEmail };
+async function resolveUserId(email: string): Promise<string | null> {
+  if (!client) {
+    throw new Error('Notion client not initialized');
+  }
+
+  try {
+    const response = await client.users.list({});
+    const user = response.results.find((u: any) => {
+      if (u.type === 'person' && u.person?.email) {
+        return u.person.email.toLowerCase() === email.toLowerCase();
+      }
+      return false;
+    });
+    return user?.id || null;
+  } catch (error) {
+    console.error('Failed to resolve user ID:', error);
+    return null;
+  }
+}
+
+/**
+ * Configure the service with new credentials and persist them.
+ * Attempts to resolve the email to a Notion user ID for filtering.
+ */
+export async function configure(
+  apiKey: string,
+  databaseId: string,
+  userEmail: string
+): Promise<void> {
   client = new Client({ auth: apiKey });
+
+  // Try to resolve the email to a user ID
+  const userId = await resolveUserId(userEmail);
+
+  credentials = { apiKey, databaseId, userEmail, userId: userId || undefined };
   saveNotionCredentials(credentials);
 }
 
@@ -69,7 +102,7 @@ export async function testConnection(): Promise<void> {
 
 /**
  * Fetch today's tasks assigned to the configured user.
- * Filters: Assigned To contains userEmail, Due Date = today, Status != Done.
+ * Filters: Assigned To contains userId (if available), Due Date = today, Status != Done.
  * Returns tasks sorted by priority (High > Medium > Low > none).
  */
 export async function getTodaysTasks(): Promise<NotionTask[]> {
@@ -79,30 +112,37 @@ export async function getTodaysTasks(): Promise<NotionTask[]> {
 
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
-  // Query with filters: due date = today, assigned to user, not done
+  // Build filter conditions
+  const filterConditions: any[] = [
+    {
+      property: 'Due Date',
+      date: {
+        equals: today,
+      },
+    },
+    {
+      property: 'Status',
+      status: {
+        does_not_equal: 'Done',
+      },
+    },
+  ];
+
+  // Only add assignee filter if we have a resolved user ID
+  if (credentials.userId) {
+    filterConditions.push({
+      property: 'Assigned To',
+      people: {
+        contains: credentials.userId,
+      },
+    });
+  }
+
+  // Query with filters: due date = today, assigned to user (if available), not done
   const response = await client.dataSources.query({
     data_source_id: credentials.databaseId,
     filter: {
-      and: [
-        {
-          property: 'Due Date',
-          date: {
-            equals: today,
-          },
-        },
-        {
-          property: 'Assigned To',
-          people: {
-            contains: credentials.userEmail,
-          },
-        },
-        {
-          property: 'Status',
-          status: {
-            does_not_equal: 'Done',
-          },
-        },
-      ],
+      and: filterConditions,
     },
     page_size: 50,
   });

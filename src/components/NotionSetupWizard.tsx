@@ -49,7 +49,7 @@ export default function NotionSetupWizard({ onComplete, onCancel }: NotionSetupW
             onClick={onCancel}
             className="text-macos-gray-400 hover:text-macos-gray-200 text-[16px] w-6 h-6 flex items-center justify-center rounded hover:bg-macos-gray-700/30 transition-colors"
           >
-            x
+            ×
           </button>
         </div>
 
