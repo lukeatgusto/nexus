@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
 import PanelHeader from './PanelHeader';
+import FileBrowser from './FileBrowser';
 
 type Tab = 'files' | 'agents';
 
@@ -48,29 +49,7 @@ function RightPanel() {
       {/* Content */}
       <div className="flex-1 p-4 overflow-y-auto">
         {activeTab === 'files' ? (
-          <div>
-            <div className="text-[11px] text-macos-gray-500 mb-2">~/Documents/BraveNewWorld</div>
-            <div className="font-mono text-[11px] text-macos-gray-300 space-y-1">
-              <div className="hover:bg-macos-gray-200 dark:hover:bg-macos-gray-700/30 p-1 rounded cursor-pointer">
-                📂 docs/
-              </div>
-              <div className="hover:bg-macos-gray-200 dark:hover:bg-macos-gray-700/30 p-1 pl-4 rounded cursor-pointer">
-                📄 README.md
-              </div>
-              <div className="hover:bg-macos-gray-200 dark:hover:bg-macos-gray-700/30 p-1 pl-4 rounded cursor-pointer">
-                📄 spec.md
-              </div>
-              <div className="hover:bg-macos-gray-200 dark:hover:bg-macos-gray-700/30 p-1 rounded cursor-pointer">
-                📂 src/
-              </div>
-            </div>
-            <div className="mt-4 text-[10px] text-macos-gray-500">
-              Right-click for actions:<br />
-              • Open<br />
-              • Reveal in Finder<br />
-              • Copy path
-            </div>
-          </div>
+          <FileBrowser />
         ) : (
           <div className="text-center py-8">
             <div className="text-[13px] font-semibold text-macos-gray-300 mb-2">

@@ -1,7 +1,250 @@
-import { app, BrowserWindow, nativeTheme } from 'electron';
+import { app, BrowserWindow, clipboard, ipcMain, nativeTheme, shell } from 'electron';
 import path from 'path';
+import os from 'os';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+import { authorize, isConnected, disconnect } from './googleOAuth';
+import { getTodaysEvents } from './googleCalendar';
+import { GOOGLE_CLIENT_ID, GOOGLE_SCOPES } from './calendarConfig';
+import * as notionService from './notionService';
+import { readDirectory, isPathAllowed } from './fileSystemService';
+
+// node-pty must be required (not imported) due to native module loading
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const pty = require('node-pty');
+
+const execFileAsync = promisify(execFile);
 
 let mainWindow: BrowserWindow | null = null;
+let ptyProcess: ReturnType<typeof pty.spawn> | null = null;
+let cwdPollInterval: ReturnType<typeof setInterval> | null = null;
+let lastKnownCwd: string = os.homedir();
+
+// ---------------------------------------------------------------------------
+// PTY Management
+// ---------------------------------------------------------------------------
+
+function spawnShell(): void {
+  const shell = process.env.SHELL || '/bin/zsh';
+  const home = os.homedir();
+
+  ptyProcess = pty.spawn(shell, ['--login'], {
+    name: 'xterm-256color',
+    cols: 80,
+    rows: 24,
+    cwd: home,
+    env: {
+      ...process.env,
+      TERM: 'xterm-256color',
+      COLORTERM: 'truecolor',
+    },
+  });
+
+  // Forward shell output to the renderer
+  ptyProcess.onData((data: string) => {
+    mainWindow?.webContents.send('terminal:data', data);
+  });
+
+  ptyProcess.onExit(({ exitCode }: { exitCode: number }) => {
+    mainWindow?.webContents.send('terminal:exit', exitCode);
+    ptyProcess = null;
+  });
+}
+
+async function getCwd(): Promise<string> {
+  if (!ptyProcess) return os.homedir();
+
+  try {
+    const pid = ptyProcess.pid;
+    // macOS: use lsof with machine-parseable output to find the cwd of the shell process
+    const { stdout } = await execFileAsync('lsof', ['-a', '-d', 'cwd', '-p', String(pid), '-Fn'], {
+      timeout: 2000,
+    });
+    // Machine-parseable output: lines starting with 'n' contain the path
+    const nameLine = stdout.split('\n').find(line => line.startsWith('n'));
+    if (nameLine) {
+      return nameLine.slice(1); // Remove the 'n' prefix
+    }
+  } catch {
+    // Fallback to home directory if lsof fails
+  }
+  return os.homedir();
+}
+
+function startCwdPolling(): void {
+  stopCwdPolling();
+  lastKnownCwd = os.homedir();
+  cwdPollInterval = setInterval(async () => {
+    try {
+      const cwd = await getCwd();
+      if (cwd !== lastKnownCwd) {
+        lastKnownCwd = cwd;
+        mainWindow?.webContents.send('terminal:cwdChanged', cwd);
+      }
+    } catch {
+      // Ignore polling errors
+    }
+  }, 1000);
+}
+
+function stopCwdPolling(): void {
+  if (cwdPollInterval) {
+    clearInterval(cwdPollInterval);
+    cwdPollInterval = null;
+  }
+}
+
+function cleanupPty(): void {
+  stopCwdPolling();
+  if (ptyProcess) {
+    ptyProcess.kill();
+    ptyProcess = null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// IPC Handlers
+// ---------------------------------------------------------------------------
+
+function setupIpcHandlers(): void {
+  ipcMain.on('open-external', (_event, url: string) => {
+    // Only allow http/https URLs for security
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      shell.openExternal(url);
+    }
+  });
+
+  ipcMain.on('terminal:write', (_event, data: string) => {
+    ptyProcess?.write(data);
+  });
+
+  ipcMain.on('terminal:resize', (_event, cols: number, rows: number) => {
+    if (ptyProcess && cols > 0 && rows > 0) {
+      try {
+        ptyProcess.resize(cols, rows);
+      } catch {
+        // Ignore resize errors (can happen during cleanup)
+      }
+    }
+  });
+
+  ipcMain.handle('terminal:getCwd', () => {
+    return getCwd();
+  });
+
+  ipcMain.on('terminal:dispose', () => {
+    cleanupPty();
+  });
+
+  ipcMain.on('terminal:restart', () => {
+    cleanupPty();
+    spawnShell();
+    startCwdPolling();
+  });
+
+  // -------------------------------------------------------------------------
+  // Calendar IPC Handlers
+  // -------------------------------------------------------------------------
+
+  ipcMain.handle('calendar:isConfigured', () => {
+    return GOOGLE_CLIENT_ID !== '';
+  });
+
+  ipcMain.handle('calendar:isConnected', () => {
+    return isConnected();
+  });
+
+  ipcMain.handle('calendar:authorize', async () => {
+    if (!GOOGLE_CLIENT_ID) {
+      throw new Error('Google Client ID not configured. Set GOOGLE_CLIENT_ID in electron/calendarConfig.ts');
+    }
+    await authorize({ clientId: GOOGLE_CLIENT_ID, scopes: GOOGLE_SCOPES });
+  });
+
+  ipcMain.handle('calendar:getEvents', async () => {
+    if (!GOOGLE_CLIENT_ID) {
+      throw new Error('Google Client ID not configured');
+    }
+    return getTodaysEvents(GOOGLE_CLIENT_ID);
+  });
+
+  ipcMain.handle('calendar:disconnect', () => {
+    disconnect();
+  });
+
+  // -------------------------------------------------------------------------
+  // Notion IPC Handlers
+  // -------------------------------------------------------------------------
+
+  ipcMain.handle('notion:isConnected', () => {
+    return notionService.isConnected();
+  });
+
+  ipcMain.handle('notion:configure', async (_event, apiKey: string, databaseId: string, userEmail: string) => {
+    await notionService.configure(apiKey, databaseId, userEmail);
+  });
+
+  ipcMain.handle('notion:testConnection', async () => {
+    await notionService.testConnection();
+  });
+
+  ipcMain.handle('notion:getTasks', async () => {
+    return notionService.getTodaysTasks();
+  });
+
+  ipcMain.on('notion:openTask', (_event, notionUrl: string) => {
+    if (notionUrl.startsWith('notion://')) {
+      shell.openExternal(notionUrl);
+    }
+  });
+
+  ipcMain.on('notion:openDatabase', () => {
+    const url = notionService.getDatabaseUrl();
+    if (url) {
+      shell.openExternal(url);
+    }
+  });
+
+  ipcMain.handle('notion:disconnect', () => {
+    notionService.disconnect();
+  });
+
+  // -------------------------------------------------------------------------
+  // File System IPC Handlers
+  // -------------------------------------------------------------------------
+
+  ipcMain.handle('fs:readDirectory', (_event, dirPath: string) => {
+    if (!isPathAllowed(dirPath)) {
+      return [];
+    }
+    return readDirectory(dirPath);
+  });
+
+  ipcMain.handle('fs:openFile', async (_event, filePath: string) => {
+    if (!isPathAllowed(filePath)) {
+      return;
+    }
+    return shell.openPath(filePath);
+  });
+
+  ipcMain.on('fs:revealInFinder', (_event, filePath: string) => {
+    if (!isPathAllowed(filePath)) {
+      return;
+    }
+    shell.showItemInFolder(filePath);
+  });
+
+  ipcMain.on('fs:copyPath', (_event, filePath: string) => {
+    if (!isPathAllowed(filePath)) {
+      return;
+    }
+    clipboard.writeText(filePath);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Window Management
+// ---------------------------------------------------------------------------
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -33,13 +276,27 @@ function createWindow() {
   });
 
   mainWindow.on('closed', () => {
+    cleanupPty();
     mainWindow = null;
   });
+
+  // Spawn the shell after the window is ready
+  spawnShell();
+  startCwdPolling();
 }
 
-app.whenReady().then(createWindow);
+// ---------------------------------------------------------------------------
+// App Lifecycle
+// ---------------------------------------------------------------------------
+
+app.whenReady().then(() => {
+  notionService.initialize();
+  setupIpcHandlers();
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
+  cleanupPty();
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -49,4 +306,8 @@ app.on('activate', () => {
   if (mainWindow === null) {
     createWindow();
   }
+});
+
+app.on('before-quit', () => {
+  cleanupPty();
 });
